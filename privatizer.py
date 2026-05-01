@@ -106,22 +106,20 @@ def privatize_dataset(document, mechanism, text_chunker, budget_distributor, wor
 
 
 def main():
-
-    parser = argparse.ArgumentParser()
-    #parser.add_argument('-i', '--input', required=True)
-    parser.add_argument('-c', '--chunker', required=True)
-    #parser.add_argument('-col', '--column', required=True)
-    #parser.add_argument('-e', '--epsilon', required=True, type=float)
-    parser.add_argument('-m', '--model', required=True)
-    args = parser.parse_args()
-
-    distributor_methods = ["keybert", "yake", "attention", "ic", "baseline"]
-    #distributor_methods = ["gradients"]
-    datasets = ["yelp_10000_sample.csv"]
+    parser = argparse.ArgumentParser(description="Privatize a dataset using MLDP and specific budget distribution.")
     
-    yelp_epsilon = 187
-    enron_epsilon = 53
-    trustpilot_epsilon = 52
+    # Required Arguments
+    parser.add_argument('-i', '--input', required=True, help='Path to the input CSV dataset')
+    parser.add_argument('-c', '--chunker', required=True, help='Chunking method (pmi, llr, pos, wordnet, etc.)')
+    parser.add_argument('-m', '--model', required=True, help='Path to the Word2Vec model')
+    parser.add_argument('-d', '--distributor', default='baseline', 
+                        help='Distribution method (keybert, yake, attention, ic, baseline)')
+    parser.add_argument('-e', '--epsilon', type=float, 
+                        help='Privacy budget. If omitted, uses dataset-specific defaults.')
+    parser.add_argument('-col', '--column', 
+                        help='The column name containing text to privatize.')
+
+    args = parser.parse_args()
 
     print(f"Initialize {args.chunker} text chunker...")
     text_chunker = ChunkGenerator(args.chunker)
@@ -130,59 +128,55 @@ def main():
     w2v_model = Word2Vec.load(args.model)
     word_vectors = w2v_model.wv
 
-    print(f"Initialize mechanism...")
+    print(f"Initialize {args.distributor} distributor...")
+    budget_distributor = BudgetDistributor(args.distributor)
+
+    print(f"Initialize MLDP mechanism...")
     mechanism = MLDP.MultivariateCalibrated(embedding_matrix=word_vectors)
+
+    dataset_path = args.input
+    df = pd.read_csv(dataset_path)
     
-    for dataset in datasets:
-        print(f"Loading {dataset} dataset...")
-        df = pd.read_csv(dataset)
-        epsilon = 0
-        column = ""
-        if dataset == "yelp_10000_sample.csv": 
-            column = "review"
-            epsilon = yelp_epsilon
-        elif dataset == "datasets/enron_10000_sample.csv":
-            column = "text"
-            epsilon = enron_epsilon
-        else:
-            column = "text"
-            epsilon = trustpilot_epsilon
+    column = args.column
+    epsilon = args.epsilon
 
-        epsilon_values = [epsilon*5, epsilon*0.1]
+    if not column:
+        column = "text" # Default fallback
 
-        for epsilon in epsilon_values:
-            print(f"Running with {dataset} and epsilon = {epsilon}")
-            for distributor in distributor_methods:
-                print(f"Initialize {distributor} distributor...")
-                budget_distributor = BudgetDistributor(distributor)
+    if epsilon is None:
+        epsilon = 50 # Default fallback
 
-                input_dir, input_filename = os.path.split(dataset)
+    input_dir, input_filename = os.path.split(dataset_path)
+    privatized_column_name = f'privatized_{column}'
+    output_filename = os.path.join(input_dir, f'privatized_{args.distributor}_{args.chunker}_{epsilon}_{input_filename}')
 
-                privatized_column_name = f'privatized_{column}'
-                output_filename_base = f'privatized_{distributor}_{args.chunker}_{epsilon}_{input_filename}'
-                output_filename = os.path.join(input_dir, output_filename_base)
-
-                with open(output_filename, 'w', newline='', encoding='utf-8') as outfile:
-                    writer = csv.writer(outfile)
-                    writer.writerow(df.columns.tolist() + [privatized_column_name])
-                    
-                    print("Start privatization of dataset...")
-                    for index, row in df.iterrows():
-                        original_text = str(row[column])
-                        if not original_text.strip():
-                            privatized_text = ""
-                        else:
-                            if (index + 1) % 100 == 0:
-                                print(f"  Privatized {index+1} / {len(df)}...")
-                            privatized_text = privatize_dataset(
-                                original_text, mechanism, text_chunker, budget_distributor, word_vectors, epsilon
-                            )
-
-                        new_row = row.values.tolist() + [privatized_text]
-                        writer.writerow(new_row)
+    print(f"Running privatization on '{column}' with epsilon={epsilon}...")
+    
+    with open(output_filename, 'w', newline='', encoding='utf-8') as outfile:
+        writer = csv.writer(outfile)
+        writer.writerow(df.columns.tolist() + [privatized_column_name])
+        
+        for index, row in df.iterrows():
+            original_text = str(row[column])
+            if not original_text.strip():
+                privatized_text = ""
+            else:
+                if (index + 1) % 100 == 0:
+                    print(f"  Privatized {index+1} / {len(df)}...")
                 
-                print(f"Privatization complete! Results saved to {output_filename}")
+                privatized_text = privatize_dataset(
+                    original_text, 
+                    mechanism, 
+                    text_chunker, 
+                    budget_distributor, 
+                    word_vectors, 
+                    epsilon
+                )
+            
+            new_row = row.values.tolist() + [privatized_text]
+            writer.writerow(new_row)
 
+    print(f"Success! Results saved to: {output_filename}")
 
 if __name__ == '__main__':
     main()
