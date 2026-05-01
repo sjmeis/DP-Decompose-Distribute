@@ -57,14 +57,14 @@ python privatizer.py -i enron_sample.csv -c llr -m word2vec_llr.model -d attenti
 
 ### Command Line Arguments for `privatizer.py`
 
-| Argument    | Flag | Description                                                                        |
-|-------------|------|------------------------------------------------------------------------------------|
-| Input       | -i   | Path to the input CSV file.                                                        |
-| Chunker     | -c   | The method used to group words (pmi, llr, pos, wordnet, t_score).                  |
-| Model       | -m   | Path to the trained Word2Vec model file.                                           |
-| Distributor | -d   | Budget distribution strategy (keybert, yake, attention, ic, gradients, baseline).  |
-| Epsilon     | -e   | The total privacy budget ($\epsilon$). If omitted, uses dataset-specific defaults. |
-| Column      | -col | The specific column in the CSV to privatize.                                       |
+| Argument    | Flag   | Description                                                                        |
+|-------------|--------|------------------------------------------------------------------------------------|
+| Input       | `-i`   | Path to the input CSV file.                                                        |
+| Chunker     | `-c`   | The method used to group words (pmi, llr, pos, wordnet, t_score).                  |
+| Model       | `-m`   | Path to the trained Word2Vec model file.                                           |
+| Distributor | `-d`   | Budget distribution strategy (keybert, yake, attention, ic, gradients, baseline).  |
+| Epsilon     | `-e`   | The total privacy budget ($\epsilon$). If omitted, uses dataset-specific defaults. |
+| Column      | `-col` | The specific column in the CSV to privatize.                                       |
 
 ### Note
 we note that `privatizer.py` uses the MADLIB (multivariate calibrated noise) approach of Feyistean et al. (2020). Adapting our framework to other similar mechanisms can be done by swapping out the mechanism in this script.
